@@ -27,14 +27,17 @@ if(WIN32 AND DSCOOP_BUILD_INSTALLER)
         COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/data/offsets.json ${PAYLOAD_DIR}/offsets.json
         DEPENDS ${CMAKE_SOURCE_DIR}/data/offsets.json VERBATIM)
 
+    set(DSCOOP_ASSETS ${CMAKE_SOURCE_DIR}/assets/installer)
+    set(INSTALLER_ASSETS ${DSCOOP_ASSETS}/icon.ico ${DSCOOP_ASSETS}/hero.jpg ${DSCOOP_ASSETS}/fonts/RussoOne-Regular.ttf
+        ${DSCOOP_ASSETS}/fonts/PTSans-Regular.ttf ${DSCOOP_ASSETS}/fonts/PTSans-Bold.ttf)
     configure_file(win/installer.rc.in ${CMAKE_CURRENT_BINARY_DIR}/installer.rc @ONLY)
     configure_file(win/installer.manifest ${CMAKE_CURRENT_BINARY_DIR}/installer.manifest COPYONLY)
     set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/installer.rc PROPERTIES
-        OBJECT_DEPENDS "${PAYLOAD_DIR}/version.dll;${PAYLOAD_DIR}/DSCoop.dll;${PAYLOAD_DIR}/offsets.json;${CMAKE_CURRENT_BINARY_DIR}/installer.manifest")
+        OBJECT_DEPENDS "${PAYLOAD_DIR}/version.dll;${PAYLOAD_DIR}/DSCoop.dll;${PAYLOAD_DIR}/offsets.json;${CMAKE_CURRENT_BINARY_DIR}/installer.manifest;${INSTALLER_ASSETS}")
 
-    add_executable(dscoop_setup WIN32 win/main_win.cpp ${CMAKE_CURRENT_BINARY_DIR}/installer.rc)
+    add_executable(dscoop_setup WIN32 win/main_win.cpp win/sys.cpp win/ui.cpp ${CMAKE_CURRENT_BINARY_DIR}/installer.rc)
     target_include_directories(dscoop_setup PRIVATE ${CMAKE_BINARY_DIR}/generated ${CMAKE_CURRENT_SOURCE_DIR}/win)
-    target_link_libraries(dscoop_setup PRIVATE dsinstcore dscoop::warnings comctl32 ole32 shell32 uuid advapi32 user32 gdi32)
+    target_link_libraries(dscoop_setup PRIVATE dsinstcore dscoop::warnings comctl32 ole32 shell32 uuid advapi32 user32 gdi32 gdiplus dwmapi shlwapi)
     target_compile_definitions(dscoop_setup PRIVATE UNICODE _UNICODE)
     if(MINGW)
         target_link_options(dscoop_setup PRIVATE -municode)

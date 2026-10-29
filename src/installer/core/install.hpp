@@ -38,7 +38,12 @@ struct InstallOptions {
     bool backupSaves = true;
     std::vector<fs::path> saveDirs;   // folders to copy before installing
     fs::path installerExe;            // copied to dscoop/DSCoopSetup.exe for later uninstall (optional)
+    /// Progress for the UI: called with 0 (saves), 1 (mod files), 2 (settings), 3 (finishing).
+    std::function<void(int step)> onStep;
 };
+
+inline constexpr int kInstallSteps = 4;
+inline constexpr int kUninstallSteps = 3;
 
 struct InstallState {
     bool installed = false;           // manifest present
@@ -63,7 +68,9 @@ Result install(const InstallOptions& opts, const Logger& log);
 
 /// Removes mod files, restores a displaced foreign version.dll. Keeps logs, settings and backups
 /// unless `removeUserData` is set (save backups are never deleted).
-Result uninstall(const fs::path& gameDir, bool removeUserData, const Logger& log);
+/// `onStep` gets 0 (mod files), 1 (other mod restored), 2 (cleanup).
+Result uninstall(const fs::path& gameDir, bool removeUserData, const Logger& log,
+                 const std::function<void(int)>& onStep = nullptr);
 
 /// yyyyMMdd-HHmmss
 std::string timestamp();

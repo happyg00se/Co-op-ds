@@ -155,7 +155,9 @@ Result install(const InstallOptions& o, const Logger& log) {
     const InstallState before = inspect(o.gameDir);
     if (before.installed) say("found DSCoop " + before.version + ", updating to " + o.version);
 
+    auto step = [&](int k) { if (o.onStep) o.onStep(k); };
     // 1. Saves first — before anything else touches the game.
+    step(0);
     if (o.backupSaves) {
         const fs::path dest = root / "backups" / ("saves_install_" + timestamp());
         size_t copied = 0;
@@ -172,6 +174,7 @@ Result install(const InstallOptions& o, const Logger& log) {
     }
 
     // 2. A foreign version.dll (another mod) is moved aside and chain-loaded by DSLoader.
+    step(1);
     json manifest = readJson(manifestPath(o.gameDir)).value_or(json::object());
     const fs::path loader = o.gameDir / "version.dll";
     if (before.foreignLoader) {
@@ -199,6 +202,7 @@ Result install(const InstallOptions& o, const Logger& log) {
     }
 
     // 4. Settings: create once, afterwards only nick / relay are changed on request.
+    step(2);
     const fs::path cfgPath = root / "dscoop.json";
     json cfg = readJson(cfgPath).value_or(json::object());
     if (!o.nick.empty()) cfg["nick"] = o.nick;
@@ -209,6 +213,7 @@ Result install(const InstallOptions& o, const Logger& log) {
     if (!writeJson(cfgPath, cfg, &err)) { r.error = err; return r; }
 
     // 5. Keep a copy of the installer for "Uninstall" in Windows settings.
+    step(3);
     if (!o.installerExe.empty() && fs::is_regular_file(o.installerExe, ec)) {
         const fs::path dst = root / "DSCoopSetup.exe";
         if (!fs::equivalent(o.installerExe, dst, ec)) {
@@ -229,8 +234,9 @@ Result install(const InstallOptions& o, const Logger& log) {
     return r;
 }
 
-Result uninstall(const fs::path& gameDir, bool removeUserData, const Logger& log) {
+Result uninstall(const fs::path& gameDir, bool removeUserData, const Logger& log, const std::function<void(int)>& onStep) {
     Result r;
+    auto step = [&](int k) { if (onStep) onStep(k); };
     std::error_code ec;
     auto say = [&](const std::string& s) { if (log) log(s); };
     if (!fs::is_directory(gameDir, ec)) { r.error = "game folder not found"; return r; }
@@ -240,6 +246,7 @@ Result uninstall(const fs::path& gameDir, bool removeUserData, const Logger& log
     if (manifest && manifest->contains("files"))
         for (const auto& f : (*manifest)["files"]) if (f.is_string()) files.push_back(f.get<std::string>());
     if (files.empty()) files = {"version.dll", "dscoop/plugins/DSCoop.dll", "dscoop/data/offsets.json"};
+    step(0);
 
     for (const auto& rel : files) {
         const fs::path p = gameDir / fromUtf8(rel);
@@ -250,11 +257,16 @@ Result uninstall(const fs::path& gameDir, bool removeUserData, const Logger& log
         say("removed " + rel);
     }
     // Restore a displaced foreign version.dll.
+    step(1);
     if (fs::is_regular_file(chainPath(gameDir), ec) && !fs::exists(gameDir / "version.dll", ec)) {
         fs::rename(chainPath(gameDir), gameDir / "version.dll", ec);
         if (!ec) say("restored the other mod's version.dll");
     }
+    step(2);
     fs::remove(manifestPath(gameDir), ec);
+    // The kept installer copy. If it is the running uninstaller, Windows refuses (file in use) and
+    // the front-end schedules its deletion after exit instead.
+    fs::remove(root / "DSCoopSetup.exe", ec);
     for (const char* d : {"plugins", "data", "chain", "cache"}) {
         if (fs::is_directory(root / d, ec) && fs::is_empty(root / d, ec)) fs::remove(root / d, ec);
     }

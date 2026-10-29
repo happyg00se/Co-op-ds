@@ -1,4 +1,9 @@
 #pragma once
+#define IDI_APP 1
 #define IDR_PAYLOAD_LOADER 101
 #define IDR_PAYLOAD_PLUGIN 102
 #define IDR_PAYLOAD_OFFSETS 103
+#define IDR_ART_HERO 201
+#define IDR_FONT_TITLE 202
+#define IDR_FONT_BODY 203
+#define IDR_FONT_BODY_BOLD 204

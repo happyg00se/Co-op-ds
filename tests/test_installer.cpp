@@ -176,9 +176,16 @@ TEST(install_update_uninstall_with_foreign_mod) {
     o.relayHost = "relay.example.com";
     o.relayPort = 27001;
     o.saveDirs = {saves};
+    writeText(s.root / "Downloads" / "DSCoopSetup.exe", "MZ-installer");
+    o.installerExe = s.root / "Downloads" / "DSCoopSetup.exe";
+    std::vector<int> steps;
+    o.onStep = [&](int k) { steps.push_back(k); };
     std::vector<std::string> lines;
     auto r = install(o, [&](const std::string& l) { lines.push_back(l); });
     CHECK(r.ok);
+    CHECK((steps == std::vector<int>{0, 1, 2, 3}));
+    CHECK_EQ(readAll(s.game / "dscoop" / "DSCoopSetup.exe"), std::string("MZ-installer"));
+    o.onStep = nullptr;
     if (!r.ok) std::printf("  error: %s\n", r.error.c_str());
 
     auto st1 = inspect(s.game);
@@ -220,10 +227,13 @@ TEST(install_update_uninstall_with_foreign_mod) {
 
     // Uninstall: our files go, the other mod's version.dll comes back, user data stays.
     writeText(s.game / "dscoop" / "logs" / "dscoop.log", "log");
-    r = uninstall(s.game, false, nullptr);
+    std::vector<int> usteps;
+    r = uninstall(s.game, false, nullptr, [&](int k) { usteps.push_back(k); });
+    CHECK((usteps == std::vector<int>{0, 1, 2}));
     CHECK(r.ok);
     CHECK(!fs::exists(s.game / "dscoop" / "plugins" / "DSCoop.dll"));
     CHECK(!fs::exists(s.game / "dscoop" / "install.json"));
+    CHECK(!fs::exists(s.game / "dscoop" / "DSCoopSetup.exe"));
     CHECK(readAll(s.game / "version.dll") == std::string(foreign.begin(), foreign.end()));
     CHECK(!fs::exists(s.game / "dscoop" / "chain" / "version_original.dll"));
     CHECK(fs::exists(s.game / "dscoop" / "logs" / "dscoop.log"));

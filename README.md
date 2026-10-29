@@ -13,6 +13,8 @@
 
 ## Установка для игроков
 
+![Установщик DSCoop](docs/img/installer-welcome.jpg)
+
 Скачай **[DSCoopSetup.exe](https://github.com/happyg00se/Co-op-ds/releases/latest)**, запусти и нажми
 «Установить». Установщик сам найдёт игру в Steam, сделает копию сохранений, возьмёт ник из
 Steam и добавит DSCoop в «Приложения» Windows для удаления. Подробно, с ответами на вопросы —
