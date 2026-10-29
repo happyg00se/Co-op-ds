@@ -1,0 +1,12 @@
+services:
+  relay:
+    build: .
+    image: dscoop-relay:latest
+    container_name: dscoop-relay
+    restart: unless-stopped
+    # host networking avoids per-port NAT overhead for 900 UDP ports; on Docker Desktop use the port list instead.
+    network_mode: host
+    command: ["--control-port", "27000", "--port-range", "27100-27999", "--stats-interval", "300"]
+    # ports:
+    #   - "27000:27000/udp"
+    #   - "27100-27999:27100-27999/udp"

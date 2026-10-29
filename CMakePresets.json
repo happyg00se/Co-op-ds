@@ -1,0 +1,72 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "windows-msvc",
+      "displayName": "Windows x64 (MSVC + vcpkg) — основная сборка игрока",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/windows-msvc",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "architecture": { "value": "x64", "strategy": "external" },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md",
+        "DSCOOP_BUILD_LOADER": "ON",
+        "DSCOOP_BUILD_PLUGIN": "ON",
+        "DSCOOP_BUILD_TOOLS": "ON",
+        "DSCOOP_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "windows-msvc-vs",
+      "displayName": "Windows x64 (Visual Studio 2022 + vcpkg)",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/windows-vs",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md",
+        "DSCOOP_BUILD_LOADER": "ON",
+        "DSCOOP_BUILD_PLUGIN": "ON"
+      }
+    },
+    {
+      "name": "mingw-cross",
+      "displayName": "Windows x64 via mingw-w64 from Linux (vendored deps, CI compile check)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/mingw-cross",
+      "toolchainFile": "${sourceDir}/cmake/toolchain-mingw-w64.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "DSCOOP_VENDORED_DEPS": "ON",
+        "DSCOOP_BUILD_LOADER": "ON",
+        "DSCOOP_BUILD_PLUGIN": "ON",
+        "DSCOOP_BUILD_TOOLS": "ON",
+        "DSCOOP_BUILD_TESTS": "OFF"
+      }
+    },
+    {
+      "name": "linux-tools",
+      "displayName": "Linux: protocol tests + testclient + relay checks",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/linux",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "DSCOOP_BUILD_LOADER": "OFF",
+        "DSCOOP_BUILD_PLUGIN": "OFF",
+        "DSCOOP_BUILD_TOOLS": "ON",
+        "DSCOOP_BUILD_TESTS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "windows-msvc", "configurePreset": "windows-msvc" },
+    { "name": "mingw-cross",  "configurePreset": "mingw-cross" },
+    { "name": "linux-tools",  "configurePreset": "linux-tools" }
+  ],
+  "testPresets": [
+    { "name": "linux-tools", "configurePreset": "linux-tools", "output": { "outputOnFailure": true } },
+    { "name": "windows-msvc", "configurePreset": "windows-msvc", "output": { "outputOnFailure": true } }
+  ]
+}

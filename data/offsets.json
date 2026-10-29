@@ -1,0 +1,154 @@
+{
+  "_comment": [
+    "DSCoop offsets database. NO absolute addresses — only signatures (IDA-style byte patterns) and",
+    "offsets relative to them. Patterns that are still empty are recon tasks (docs/00-recon-guide.md).",
+    "signatures.<name>: { pattern, offset, rip:{disp,len}, required, note }  -> see src/loader/src/sigscan.hpp",
+    "pointers.<name>:   { base: module|sig:<name>|ptr:<name>, add, chain:[...], type, note } -> see src/plugin/src/game_bridge.hpp",
+    "rtti.layout:       Decima RTTI record layout used by the RTTI dumper. verified=false until recon step 6 confirms it."
+  ],
+  "schema_version": 1,
+  "game": {
+    "name": "Death Stranding Director's Cut",
+    "exe_candidates": [
+      "ds.exe",
+      "DeathStranding.exe"
+    ],
+    "known_builds": {
+      "_comment": "build_id (from dsloader.log) -> human label. Filled as players report their versions.",
+      "0": "unknown"
+    }
+  },
+  "signatures": {
+    "GameReadyMarker": {
+      "pattern": "",
+      "offset": 0,
+      "required": false,
+      "note": "Recon 1: any unique byte sequence in .text that exists once the engine is up (optional sanity check)."
+    },
+    "PlayerManagerInstance": {
+      "pattern": "",
+      "offset": 0,
+      "rip": {
+        "disp": 3,
+        "len": 7
+      },
+      "required": false,
+      "note": "Recon 3: 'mov rax,[rip+X]' / 'mov rcx,[rip+X]' that loads the global holding the local player (CE pointer-scan static base -> x64dbg xref). rip.disp/len are for a 7-byte 48 8B 05 xx xx xx xx form."
+    },
+    "CameraManagerInstance": {
+      "pattern": "",
+      "offset": 0,
+      "rip": {
+        "disp": 3,
+        "len": 7
+      },
+      "required": false,
+      "note": "Recon 5: global pointer to the active camera (view-projection matrix lives below it)."
+    },
+    "RTTIFactory_RegisterType": {
+      "pattern": "",
+      "offset": 0,
+      "required": false,
+      "note": "Recon 6 (optional): function that registers an RTTI type — hooking it is the alternative to scanning .data."
+    },
+    "Entity_SetWorldTransform": {
+      "pattern": "",
+      "offset": 0,
+      "required": false,
+      "note": "Stage 2: used to move puppet Sams. Found by breaking on write to the player position (x64dbg hardware bp)."
+    }
+  },
+  "pointers": {
+    "local_player": {
+      "base": "sig:PlayerManagerInstance",
+      "add": 0,
+      "chain": [],
+      "type": "u64",
+      "note": "Recon 3: pointer to the local Player entity. Fill chain from the CE pointer scan (green static base -> offsets)."
+    },
+    "local_player_position": {
+      "base": "sig:PlayerManagerInstance",
+      "add": 0,
+      "chain": [],
+      "type": "vec3d",
+      "note": "Recon 2-3: WorldPosition of Sam. Decima stores world coords as 3 doubles (X,Y,Z; Z up). If the CE scan finds floats use type vec3f."
+    },
+    "local_player_yaw": {
+      "base": "sig:PlayerManagerInstance",
+      "add": 0,
+      "chain": [],
+      "type": "mat3_f32",
+      "note": "Recon 4: orientation. Decima WorldTransform = 3x3 float rotation (9 floats, 36 bytes, usually padded to 48) immediately BEFORE the 3 doubles of WorldPosition, so try chain = position chain with the last offset minus 0x30. Alternatives: quat_f32 (x,y,z,w) or a single yaw f32."
+    },
+    "local_player_health": {
+      "base": "sig:PlayerManagerInstance",
+      "add": 0,
+      "chain": [],
+      "type": "f32",
+      "note": "Stage 4. Health of Sam (0..1 or 0..1000; the bridge normalises >1 by /1000)."
+    },
+    "camera_view_proj": {
+      "base": "sig:CameraManagerInstance",
+      "add": 0,
+      "chain": [],
+      "type": "mat4_f32",
+      "layout": "row_major",
+      "note": "Recon 5 (optional): 16 floats view*projection, if found directly. Otherwise the bridge builds it from camera_rotation + camera_position + camera_fov."
+    },
+    "camera_position": {
+      "base": "sig:CameraManagerInstance",
+      "add": 0,
+      "chain": [],
+      "type": "vec3d",
+      "note": "Recon 5: camera world position (for distance culling)."
+    },
+    "camera_rotation": {
+      "base": "sig:CameraManagerInstance",
+      "add": 0,
+      "chain": [],
+      "type": "mat3_f32",
+      "right_row": 0,
+      "forward_row": 1,
+      "up_row": 2,
+      "note": "Recon 5: camera 3x3 orientation (same WorldTransform layout as the player). right/forward/up_row say which matrix row is which axis; swap them if markers land in the wrong place."
+    },
+    "camera_fov": {
+      "base": "sig:CameraManagerInstance",
+      "add": 0,
+      "chain": [],
+      "type": "f32",
+      "note": "Recon 5: vertical field of view in degrees (default 55 is assumed when missing). Changes with the FOV slider / aiming."
+    }
+  },
+  "rtti": {
+    "_comment": "Defaults follow the public Horizon Zero Dawn PC layout (same Decima generation). DS DC may differ: recon step 6 verifies name/kind/size offsets on a known class like 'Entity'.",
+    "layout": {
+      "verified": false,
+      "kindOffset": 2,
+      "kindClass": 4,
+      "kindEnum": 3,
+      "kindPrimitive": 0,
+      "kindMax": 7,
+      "inheritanceCountOffset": 7,
+      "memberCountOffset": 8,
+      "sizeOffset": 12,
+      "nameOffset": 56,
+      "prevOffset": 64,
+      "nextOffset": 72,
+      "inheritanceTableOffset": 80,
+      "memberTableOffset": 88,
+      "headerSize": 128,
+      "inhEntrySize": 16,
+      "inhTypeOffset": 0,
+      "inhOffsetOffset": 8,
+      "memberEntrySize": 48,
+      "memberTypeOffset": 0,
+      "memberOffsetOffset": 8,
+      "memberFlagsOffset": 10,
+      "memberNameOffset": 16,
+      "maxMembers": 2048,
+      "maxBases": 32,
+      "maxSize": 67108864
+    }
+  }
+}

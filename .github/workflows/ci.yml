@@ -1,0 +1,57 @@
+name: CI
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  linux-tests:
+    name: Linux — unit tests, relay tests, e2e smoke
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build libenet-dev libspdlog-dev libfmt-dev nlohmann-json3-dev
+      - run: pip install pytest pytest-asyncio
+      - run: python3 tools/scripts/validate_offsets.py data/offsets.json
+      - run: scripts/build-linux.sh
+      - run: scripts/e2e-local.sh 6
+
+  mingw-cross:
+    name: Windows binaries via mingw-w64 (compile check)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build mingw-w64 libspdlog-dev libfmt-dev nlohmann-json3-dev
+      - run: scripts/build-mingw.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dscoop-mingw-${{ github.sha }}
+          path: |
+            build/mingw-cross/bin/version.dll
+            build/mingw-cross/bin/dscoop/plugins/DSCoop.dll
+            build/mingw-cross/bin/dscoop_testclient.exe
+            data/offsets.json
+
+  windows-msvc:
+    name: Windows — MSVC + vcpkg (release build)
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      # The runner image ships vcpkg at $env:VCPKG_ROOT; manifest mode installs vcpkg.json deps on configure.
+      - name: Configure
+        run: cmake --preset windows-msvc
+      - name: Build
+        run: cmake --build --preset windows-msvc
+      - name: Test
+        run: ctest --preset windows-msvc
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dscoop-windows-${{ github.sha }}
+          path: |
+            build/windows-msvc/bin/version.dll
+            build/windows-msvc/bin/dscoop/plugins/DSCoop.dll
+            build/windows-msvc/bin/dscoop_testclient.exe
+            data/offsets.json

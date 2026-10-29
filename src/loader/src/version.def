@@ -1,0 +1,18 @@
+LIBRARY version
+EXPORTS
+    GetFileVersionInfoA = ds_GetFileVersionInfoA
+    GetFileVersionInfoW = ds_GetFileVersionInfoW
+    GetFileVersionInfoExA = ds_GetFileVersionInfoExA
+    GetFileVersionInfoExW = ds_GetFileVersionInfoExW
+    GetFileVersionInfoSizeA = ds_GetFileVersionInfoSizeA
+    GetFileVersionInfoSizeW = ds_GetFileVersionInfoSizeW
+    GetFileVersionInfoSizeExA = ds_GetFileVersionInfoSizeExA
+    GetFileVersionInfoSizeExW = ds_GetFileVersionInfoSizeExW
+    VerFindFileA = ds_VerFindFileA
+    VerFindFileW = ds_VerFindFileW
+    VerInstallFileA = ds_VerInstallFileA
+    VerInstallFileW = ds_VerInstallFileW
+    VerLanguageNameA = ds_VerLanguageNameA
+    VerLanguageNameW = ds_VerLanguageNameW
+    VerQueryValueA = ds_VerQueryValueA
+    VerQueryValueW = ds_VerQueryValueW

@@ -1,0 +1,5 @@
+add_executable(dscoop_testclient main.cpp)
+target_link_libraries(dscoop_testclient PRIVATE dscoop::net dscoop::common dscoop::warnings)
+target_include_directories(dscoop_testclient PRIVATE ${CMAKE_BINARY_DIR}/generated)
+set_target_properties(dscoop_testclient PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+install(TARGETS dscoop_testclient RUNTIME DESTINATION dscoop/tools)

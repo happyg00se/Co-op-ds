@@ -1,0 +1,23 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "dscoop",
+  "version-string": "0.1.0",
+  "description": "DSCoop — story co-op mod for Death Stranding Director's Cut",
+  "dependencies": [
+    "enet",
+    "nlohmann-json",
+    "spdlog",
+    {
+      "name": "minhook",
+      "platform": "windows"
+    },
+    {
+      "name": "imgui",
+      "features": [
+        "dx12-binding",
+        "win32-binding"
+      ],
+      "platform": "windows"
+    }
+  ]
+}
