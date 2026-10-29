@@ -1,7 +1,9 @@
 set(DSCOOP_PLUGIN_SOURCES
     src/plugin_main.cpp
     src/coop.cpp
-    src/game_bridge.cpp)
+    src/game_bridge.cpp
+    src/puppets.cpp
+    src/game_tick_hook.cpp)
 if(DSCOOP_WITH_IMGUI)
     list(APPEND DSCOOP_PLUGIN_SOURCES src/dx12_hook.cpp src/overlay.cpp)
 endif()

@@ -48,6 +48,12 @@ public:
     std::optional<dsproto::Vec3> cameraPos() const { return camPos_; }
     void setAspect(float a) { aspect_ = a > 0 ? a : aspect_; }
 
+    /// Final address of a named pointer chain (nullopt if it does not resolve right now).
+    std::optional<uintptr_t> resolvePointer(const std::string& name) const {
+        auto it = chains_.find(name);
+        return it == chains_.end() ? std::nullopt : follow(it->second);
+    }
+
     /// Resolved final addresses for the debug UI.
     struct PointerDebug { std::string name; uintptr_t address; std::string type; bool ok; std::string note; };
     std::vector<PointerDebug> debugPointers() const;

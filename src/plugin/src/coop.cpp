@@ -7,6 +7,7 @@
 #include "dscommon/paths.hpp"
 #include "dscommon/version.hpp"
 #include "dsnet/enet_transport.hpp"
+#include "game_tick_hook.hpp"
 
 namespace dscoop {
 using namespace dsproto;
@@ -25,6 +26,7 @@ nlohmann::json CoopConfig::toJson() const {
         {"tick_rate", tickRate},
         {"host_flags", {{"pvp", pvp}, {"dc_content", dcContent}, {"sync_weather", syncWeather}}},
         {"ui", {{"show_markers", showMarkers}, {"show_radar", showRadar}}},
+        {"puppets", puppets},
         {"auto_host", autoHost},
         {"auto_join_code", autoJoinCode},
         {"log_level", logLevel},
@@ -52,6 +54,7 @@ CoopConfig CoopConfig::fromJson(const nlohmann::json& j) {
         c.showMarkers = j["ui"].value("show_markers", c.showMarkers);
         c.showRadar = j["ui"].value("show_radar", c.showRadar);
     }
+    c.puppets = j.value("puppets", c.puppets);
     c.autoHost = j.value("auto_host", c.autoHost);
     c.autoJoinCode = j.value("auto_join_code", c.autoJoinCode);
     c.logLevel = j.value("log_level", c.logLevel);
@@ -95,12 +98,32 @@ bool CoopManager::init(const DSLoaderApi& api, std::string* err) {
         chat_.push_back(who + ": " + t);
         while (chat_.size() > 200) chat_.pop_front();
     };
+    // Stage 2: puppets run from the engine tick, never from the render thread.
+    puppets_.init(std::make_unique<DecimaBackend>(
+        api, offsets_, [this](const char* n) { return api_->resolve(n); },
+        [this](const std::string& n) { return bridge_.resolvePointer(n); }));
+    puppets_.setEnabled(cfg_.puppets);
+    std::string why;
+    tickHooked_ = gametick::install(api, [this](float dt) { onGameTick(dt); }, &why);
+    tickStatus_ = tickHooked_ ? "hooked" : why;
+    DSLOG_INFO("game tick: {}", tickStatus_);
+    DSLOG_INFO("puppets: {}", puppets_.status());
     startedMs_ = nowMs();
     (void)err;
     return true;
 }
 
+void CoopManager::onGameTick(float dtSec) {
+    std::lock_guard<std::recursive_mutex> lk(mutex_);
+    if (!session_ || session_->role() == dsnet::Session::Role::None) { if (puppets_.count()) puppets_.clear(); return; }
+    puppets_.setEnabled(cfg_.puppets);
+    puppets_.tick(*session_, nowMs(), dtSec);
+}
+
 void CoopManager::shutdown() {
+    gametick::uninstall();
+    std::lock_guard<std::recursive_mutex> lk(mutex_);
+    puppets_.clear();  // best effort: not on the game thread anymore, but the hook is gone
     if (session_) { session_->leave(); session_.reset(); }
     saveConfig();
     DSLOG_INFO("DSCoop plugin shutdown");
@@ -126,6 +149,7 @@ dsnet::SessionConfig CoopManager::sessionConfig() const {
 }
 
 void CoopManager::hostSession(bool useRelay) {
+    std::lock_guard<std::recursive_mutex> lk(mutex_);
     std::string err;
     std::optional<dsnet::RelayOptions> relay;
     if (useRelay) {
@@ -136,6 +160,7 @@ void CoopManager::hostSession(bool useRelay) {
 }
 
 void CoopManager::joinByCode(const std::string& code) {
+    std::lock_guard<std::recursive_mutex> lk(mutex_);
     if (cfg_.relayHost.empty()) { logEvent("relay host is empty in settings"); return; }
     std::string err;
     cfg_.lastCode = code;
@@ -143,6 +168,7 @@ void CoopManager::joinByCode(const std::string& code) {
 }
 
 void CoopManager::joinDirect(const std::string& hostPort) {
+    std::lock_guard<std::recursive_mutex> lk(mutex_);
     auto ep = dsnet::Endpoint::parse(hostPort, 27015);
     if (!ep) { logEvent("bad address, use ip:port"); return; }
     cfg_.directHost = hostPort;
@@ -150,8 +176,8 @@ void CoopManager::joinDirect(const std::string& hostPort) {
     if (!session_->joinDirect(sessionConfig(), *ep, &err)) logEvent("join failed: " + err);
 }
 
-void CoopManager::leaveSession() { if (session_) session_->leave(); }
-void CoopManager::sendChat(const std::string& text) { if (session_ && !text.empty()) session_->sendChat(text); }
+void CoopManager::leaveSession() { std::lock_guard<std::recursive_mutex> lk(mutex_); if (session_) session_->leave(); }
+void CoopManager::sendChat(const std::string& text) { std::lock_guard<std::recursive_mutex> lk(mutex_); if (session_ && !text.empty()) session_->sendChat(text); }
 
 void CoopManager::saveConfig() {
     std::string err;
@@ -185,6 +211,7 @@ void CoopManager::applyLocalState(uint32_t now) {
 }
 
 void CoopManager::update() {
+    std::lock_guard<std::recursive_mutex> lk(mutex_);
     if (!session_) return;
     const uint32_t now = nowMs();
     bridge_.update();

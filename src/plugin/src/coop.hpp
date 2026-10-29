@@ -12,6 +12,8 @@
 #include "dsloader/plugin_api.h"
 #include "dsnet/session.hpp"
 #include "game_bridge.hpp"
+#include "puppets.hpp"
+#include <mutex>
 
 namespace dscoop {
 
@@ -28,6 +30,7 @@ struct CoopConfig {
     bool dcContent = true;
     bool syncWeather = true;
     bool showMarkers = true;
+    bool puppets = true;                  // spawn real Sams for remote players (stage 2)
     bool showRadar = true;
     bool autoHost = false;
     std::string autoJoinCode;
@@ -63,8 +66,15 @@ public:
     const std::deque<std::string>& chatLog() const { return chat_; }
     const std::deque<std::string>& eventLog() const { return events_; }
     void logEvent(const std::string& s);
+    PuppetManager& puppets() { return puppets_; }
+    bool gameTickHooked() const { return tickHooked_; }
+    const std::string& gameTickStatus() const { return tickStatus_; }
+    /// Serialises session access between the render thread (update/UI) and the game-tick thread (puppets).
+    std::recursive_mutex& mutex() { return mutex_; }
 
 private:
+    void onGameTick(float dtSec);
+
     dsnet::SessionConfig sessionConfig() const;
     void applyLocalState(uint32_t now);
 
@@ -79,6 +89,10 @@ private:
     float fakeAngle_ = 0.0f;
     bool autoStarted_ = false;
     uint32_t startedMs_ = 0;
+    PuppetManager puppets_;
+    bool tickHooked_ = false;
+    std::string tickStatus_;
+    std::recursive_mutex mutex_;
 };
 
 }  // namespace dscoop

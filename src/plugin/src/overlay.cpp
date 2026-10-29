@@ -8,6 +8,7 @@
 
 #include "dscommon/log.hpp"
 #include "dx12_hook.hpp"
+#include "game_tick_hook.hpp"
 #include "imgui.h"
 
 namespace dscoop {
@@ -64,6 +65,7 @@ bool Overlay::handleWndProc(void*, unsigned msg, uintptr_t wparam, intptr_t) {
 }
 
 void Overlay::draw() {
+    std::lock_guard<std::recursive_mutex> lk(coop_.mutex());
     if (!buffersInit_) {
         buffersInit_ = true;
         std::strncpy(codeBuf_, coop_.config().lastCode.c_str(), sizeof(codeBuf_) - 1);
@@ -96,6 +98,8 @@ void Overlay::drawStatusBar() {
         ImGui::TextDisabled("not in a session");
     }
     if (!coop_.bridge().isAttached()) ImGui::TextColored(ImVec4(1, 0.7f, 0.3f, 1), "game memory: %s", coop_.bridge().status().c_str());
+    if (s && s->role() != dsnet::Session::Role::None && !coop_.gameTickHooked())
+        ImGui::TextColored(ImVec4(1, 0.7f, 0.3f, 1), "puppets off: %s", coop_.gameTickStatus().c_str());
     ImGui::End();
 }
 
@@ -265,6 +269,10 @@ void Overlay::drawMenu() {
             ImGui::Checkbox("Контент Director's Cut", &cfg.dcContent);
             ImGui::Checkbox("Синхронизировать погоду/время", &cfg.syncWeather);
             ImGui::EndDisabled();
+            ImGui::SeparatorText("Марионетки (этап 2)");
+            ImGui::Checkbox("Спавнить настоящих Сэмов для напарников", &cfg.puppets);
+            ImGui::TextDisabled("%s", coop_.puppets().status().c_str());
+            ImGui::TextDisabled("игровой тик: %s", coop_.gameTickStatus().c_str());
             ImGui::SeparatorText("Интерфейс");
             ImGui::Checkbox("Маркеры над игроками", &cfg.showMarkers);
             ImGui::Checkbox("Радар", &cfg.showRadar);
@@ -297,6 +305,7 @@ void Overlay::drawDebug() {
     const auto& ls = b.localState();
     ImGui::Text("local pos %.2f %.2f %.2f  yaw %.2f  vel %.2f  hp %.2f", ls.pos.x, ls.pos.y, ls.pos.z, ls.yaw, ls.vel.length(), ls.health);
     ImGui::Text("camera matrix: %s", b.hasCamera() ? "yes" : "no (markers disabled, radar works)");
+    ImGui::Text("game tick: %s (%u ticks) | puppets: %s", coop_.gameTickStatus().c_str(), gametick::tickCount(), coop_.puppets().status().c_str());
     if (ImGui::BeginTable("ptrs", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
         ImGui::TableSetupColumn("pointer"); ImGui::TableSetupColumn("type"); ImGui::TableSetupColumn("address"); ImGui::TableSetupColumn("note");
         ImGui::TableHeadersRow();

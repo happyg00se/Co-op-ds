@@ -4,7 +4,8 @@
     "offsets relative to them. Patterns that are still empty are recon tasks (docs/00-recon-guide.md).",
     "signatures.<name>: { pattern, offset, rip:{disp,len}, required, note }  -> see src/loader/src/sigscan.hpp",
     "pointers.<name>:   { base: module|sig:<name>|ptr:<name>, add, chain:[...], type, note } -> see src/plugin/src/game_bridge.hpp",
-    "rtti.layout:       Decima RTTI record layout used by the RTTI dumper. verified=false until recon step 6 confirms it."
+    "rtti.layout:       Decima RTTI record layout used by the RTTI dumper. verified=false until recon step 6 confirms it.",
+    "layouts.<name>:    byte layouts of engine structs we write (WorldTransform, ...). verified=false until recon confirms."
   ],
   "schema_version": 1,
   "game": {
@@ -55,7 +56,31 @@
       "pattern": "",
       "offset": 0,
       "required": false,
-      "note": "Stage 2: used to move puppet Sams. Found by breaking on write to the player position (x64dbg hardware bp)."
+      "note": "Recon 8: sets an entity's WorldTransform (teleport). Found by hardware bp on write to the player position -> the writing function. Assumed shape: void(void* entity, const WorldTransform*)."
+    },
+    "Game_Tick": {
+      "pattern": "",
+      "offset": 0,
+      "required": false,
+      "note": "Recon 7: per-frame game update called once per frame on the game thread (candidate: the caller of the player Mover update; find via hardware bp on write to the player position -> walk up the call stack to a function hit exactly once per frame). Assumed shape: void(void* self, float dt)."
+    },
+    "Entity_SpawnFromResource": {
+      "pattern": "",
+      "offset": 0,
+      "required": false,
+      "note": "Recon 8: engine function that instantiates an Entity from an EntityResource at a WorldTransform (HZD analogue: EntityResource::CreateEntity / WorldState::AddEntity). Assumed shape: void*(void* resource, const WorldTransform*)."
+    },
+    "Entity_Destroy": {
+      "pattern": "",
+      "offset": 0,
+      "required": false,
+      "note": "Recon 8 (optional): removes an entity from the world. Without it puppets of departed players stay as statues until reload."
+    },
+    "Mover_SetLocomotion": {
+      "pattern": "",
+      "offset": 0,
+      "required": false,
+      "note": "Recon 9 (optional): sets locomotion parameters (speed/direction) on an entity's Mover/animation graph so puppets walk instead of sliding. Assumed shape: void(void* entity, float speed, float dir, u32 flags)."
     }
   },
   "pointers": {
@@ -118,6 +143,13 @@
       "chain": [],
       "type": "f32",
       "note": "Recon 5: vertical field of view in degrees (default 55 is assumed when missing). Changes with the FOV slider / aiming."
+    },
+    "local_player_entity_resource": {
+      "base": "ptr:local_player",
+      "add": 0,
+      "chain": [],
+      "type": "u64",
+      "note": "Recon 8: pointer to Sam's EntityResource inside the Player entity (RTTI dump: field of type EntityResource*/Ref<EntityResource> in Entity/Player). Used to spawn puppets with the same model + collision capsule."
     }
   },
   "rtti": {
@@ -149,6 +181,15 @@
       "maxMembers": 2048,
       "maxBases": 32,
       "maxSize": 67108864
+    }
+  },
+  "layouts": {
+    "world_transform": {
+      "verified": false,
+      "size": 80,
+      "rotation_offset": 0,
+      "position_offset": 48,
+      "note": "Recon 4/8: 3x3 float rotation (36 bytes, padded) followed by 3 doubles of position. Verify sizes against the RTTI dump (class WorldTransform)."
     }
   }
 }
