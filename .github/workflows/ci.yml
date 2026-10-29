@@ -17,13 +17,21 @@ jobs:
       - run: scripts/e2e-local.sh 6
 
   mingw-cross:
-    name: Windows binaries via mingw-w64 (compile check)
+    name: Windows binaries + DSCoopSetup.exe via mingw-w64, installer tested under Wine
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y ninja-build mingw-w64 libspdlog-dev libfmt-dev nlohmann-json3-dev
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build mingw-w64 libspdlog-dev libfmt-dev nlohmann-json3-dev wine64
       - run: scripts/build-mingw.sh
-      - uses: actions/upload-artifact@v4
+      - name: Installer scenarios under Wine
+        run: scripts/test-installer-wine.sh build/mingw-cross/bin/DSCoopSetup.exe
+      - name: Upload DSCoopSetup.exe (what players download)
+        uses: actions/upload-artifact@v4
+        with:
+          name: DSCoopSetup-${{ github.sha }}
+          path: build/mingw-cross/bin/DSCoopSetup.exe
+      - name: Upload loose binaries (developers)
+        uses: actions/upload-artifact@v4
         with:
           name: dscoop-mingw-${{ github.sha }}
           path: |
@@ -64,4 +72,5 @@ jobs:
             build/windows-msvc/bin/version.dll
             build/windows-msvc/bin/dscoop/plugins/DSCoop.dll
             build/windows-msvc/bin/dscoop_testclient.exe
+            build/windows-msvc/bin/DSCoopSetup.exe
             data/offsets.json

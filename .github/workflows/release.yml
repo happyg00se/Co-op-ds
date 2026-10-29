@@ -1,0 +1,36 @@
+name: Release
+# Publishing a GitHub Release (Releases -> "Draft a new release" -> tag vX.Y.Z -> Publish) builds
+# DSCoopSetup.exe, checks it under Wine and attaches it to that release. Players download one file.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to (re)attach DSCoopSetup.exe to"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  installer:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build mingw-w64 libspdlog-dev libfmt-dev nlohmann-json3-dev wine64
+      - name: Build (Release)
+        run: BUILD_TYPE=Release scripts/build-mingw.sh
+      - name: Installer scenarios under Wine
+        run: scripts/test-installer-wine.sh build/mingw-cross/bin/DSCoopSetup.exe
+      - name: Checksum
+        run: cd build/mingw-cross/bin && sha256sum DSCoopSetup.exe > DSCoopSetup.exe.sha256 && cat DSCoopSetup.exe.sha256
+      - name: Attach to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name || inputs.tag }}
+          files: |
+            build/mingw-cross/bin/DSCoopSetup.exe
+            build/mingw-cross/bin/DSCoopSetup.exe.sha256

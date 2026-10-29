@@ -28,6 +28,7 @@
 | `src/net` | `ITransport` (ENet / loopback), `RelayClient`, `Session` | любая |
 | `src/loader` | DSLoader (`version.dll`) | Windows |
 | `src/plugin` | DSCoop.dll | Windows |
+| `src/installer` | `DSCoopSetup.exe`: ядро (Steam, PE, установка — тестируется на Linux) + окно Win32 | ядро любая, exe Windows |
 | `tools/testclient` | консольный клиент с фейковыми координатами | любая |
 | `relay` | релей/хаб на Python + Dockerfile | Linux/Docker |
 | `tests` | юнит-тесты (протокол, сигнатуры, RTTI-скан, сессия на loopback) | любая |

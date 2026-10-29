@@ -16,3 +16,4 @@ EXPORTS
     VerLanguageNameW = ds_VerLanguageNameW
     VerQueryValueA = ds_VerQueryValueA
     VerQueryValueW = ds_VerQueryValueW
+    DSLoader_GetVersion = ds_DSLoader_GetVersion

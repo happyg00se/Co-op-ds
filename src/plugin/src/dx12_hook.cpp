@@ -47,6 +47,19 @@ std::mutex g_mutex;
 
 void log(DSLogLevel lvl, const std::string& s) { if (g_api) g_api->log(lvl, "DSCoop/dx12", s.c_str()); }
 
+// SRV descriptors for ImGui textures. ImGui >= 1.91.6 asks for them through callbacks (1.92+ needs
+// more than one because fonts became dynamic textures); older versions take a single descriptor.
+constexpr UINT kSrvHeapSize = 64;
+UINT g_srvIncrement = 0;
+std::vector<UINT> g_srvFree;
+
+void srvReset() {
+    g_srvFree.clear();
+    for (UINT i = kSrvHeapSize; i > 0; --i) g_srvFree.push_back(i - 1);
+}
+bool srvAlloc(D3D12_CPU_DESCRIPTOR_HANDLE* cpu, D3D12_GPU_DESCRIPTOR_HANDLE* gpu);
+void srvFree(D3D12_CPU_DESCRIPTOR_HANDLE cpu);
+
 template <class T> void release(T*& p) { if (p) { p->Release(); p = nullptr; } }
 
 void releaseFrames() {
@@ -101,7 +114,7 @@ bool initWithSwapChain(IDXGISwapChain* swapChain) {
     D3D12_DESCRIPTOR_HEAP_DESC rtv{};
     rtv.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV; rtv.NumDescriptors = buffers; rtv.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
     D3D12_DESCRIPTOR_HEAP_DESC srv{};
-    srv.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; srv.NumDescriptors = 1; srv.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    srv.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; srv.NumDescriptors = kSrvHeapSize; srv.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     if (FAILED(g_device->CreateDescriptorHeap(&rtv, IID_PPV_ARGS(&g_rtvHeap))) || FAILED(g_device->CreateDescriptorHeap(&srv, IID_PPV_ARGS(&g_srvHeap)))) {
         sc->Release(); log(DSLOG_ERROR, "CreateDescriptorHeap failed"); return false;
     }
@@ -118,13 +131,45 @@ bool initWithSwapChain(IDXGISwapChain* swapChain) {
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     ImGui::StyleColorsDark();
     ImGui_ImplWin32_Init(g_hwnd);
-    ImGui_ImplDX12_Init(g_device, static_cast<int>(buffers), desc.BufferDesc.Format, g_srvHeap,
-                        g_srvHeap->GetCPUDescriptorHandleForHeapStart(), g_srvHeap->GetGPUDescriptorHandleForHeapStart());
+    g_srvIncrement = g_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    srvReset();
+#if IMGUI_VERSION_NUM > 19150
+    ImGui_ImplDX12_InitInfo info;
+    info.Device = g_device;
+    info.CommandQueue = g_queue.load();
+    info.NumFramesInFlight = static_cast<int>(buffers);
+    info.RTVFormat = desc.BufferDesc.Format;
+    info.DSVFormat = DXGI_FORMAT_UNKNOWN;
+    info.SrvDescriptorHeap = g_srvHeap;
+    info.SrvDescriptorAllocFn = [](ImGui_ImplDX12_InitInfo*, D3D12_CPU_DESCRIPTOR_HANDLE* cpu, D3D12_GPU_DESCRIPTOR_HANDLE* gpu) { srvAlloc(cpu, gpu); };
+    info.SrvDescriptorFreeFn = [](ImGui_ImplDX12_InitInfo*, D3D12_CPU_DESCRIPTOR_HANDLE cpu, D3D12_GPU_DESCRIPTOR_HANDLE) { srvFree(cpu); };
+    ImGui_ImplDX12_Init(&info);
+#else
+    D3D12_CPU_DESCRIPTOR_HANDLE fontCpu{};
+    D3D12_GPU_DESCRIPTOR_HANDLE fontGpu{};
+    srvAlloc(&fontCpu, &fontGpu);
+    ImGui_ImplDX12_Init(g_device, static_cast<int>(buffers), desc.BufferDesc.Format, g_srvHeap, fontCpu, fontGpu);
+#endif
     g_origWndProc = reinterpret_cast<WNDPROC>(SetWindowLongPtrW(g_hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(wndProcHook)));
     sc->Release();
     g_ready = true;
     log(DSLOG_INFO, "ImGui DX12 overlay initialised (" + std::to_string(buffers) + " back buffers, " + std::to_string(desc.BufferDesc.Width) + "x" + std::to_string(desc.BufferDesc.Height) + ")");
     return true;
+}
+
+bool srvAlloc(D3D12_CPU_DESCRIPTOR_HANDLE* cpu, D3D12_GPU_DESCRIPTOR_HANDLE* gpu) {
+    if (g_srvFree.empty() || !g_srvHeap) { log(DSLOG_ERROR, "ImGui SRV heap exhausted"); return false; }
+    const UINT idx = g_srvFree.back();
+    g_srvFree.pop_back();
+    cpu->ptr = g_srvHeap->GetCPUDescriptorHandleForHeapStart().ptr + static_cast<SIZE_T>(idx) * g_srvIncrement;
+    gpu->ptr = g_srvHeap->GetGPUDescriptorHandleForHeapStart().ptr + static_cast<UINT64>(idx) * g_srvIncrement;
+    return true;
+}
+
+void srvFree(D3D12_CPU_DESCRIPTOR_HANDLE cpu) {
+    if (!g_srvHeap || !g_srvIncrement) return;
+    const SIZE_T start = g_srvHeap->GetCPUDescriptorHandleForHeapStart().ptr;
+    g_srvFree.push_back(static_cast<UINT>((cpu.ptr - start) / g_srvIncrement));
 }
 
 HRESULT WINAPI hkPresent(IDXGISwapChain* swapChain, UINT sync, UINT flags) {

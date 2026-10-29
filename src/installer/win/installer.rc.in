@@ -1,0 +1,32 @@
+#include <windows.h>
+#include "@CMAKE_CURRENT_SOURCE_DIR@/win/resource_ids.h"
+
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "@CMAKE_CURRENT_BINARY_DIR@/installer.manifest"
+
+IDR_PAYLOAD_LOADER  RCDATA "@CMAKE_CURRENT_BINARY_DIR@/payload/version.dll"
+IDR_PAYLOAD_PLUGIN  RCDATA "@CMAKE_CURRENT_BINARY_DIR@/payload/DSCoop.dll"
+IDR_PAYLOAD_OFFSETS RCDATA "@CMAKE_CURRENT_BINARY_DIR@/payload/offsets.json"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+PRODUCTVERSION  @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+FILEOS          0x40004
+FILETYPE        0x1
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "CompanyName",      "DSCoop"
+      VALUE "FileDescription",  "DSCoop installer - co-op mod for Death Stranding Director's Cut"
+      VALUE "FileVersion",      "@PROJECT_VERSION@"
+      VALUE "ProductName",      "DSCoop"
+      VALUE "ProductVersion",   "@PROJECT_VERSION@"
+      VALUE "OriginalFilename", "DSCoopSetup.exe"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END

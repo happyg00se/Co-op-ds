@@ -1,0 +1,4 @@
+#pragma once
+#define IDR_PAYLOAD_LOADER 101
+#define IDR_PAYLOAD_PLUGIN 102
+#define IDR_PAYLOAD_OFFSETS 103

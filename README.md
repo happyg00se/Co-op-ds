@@ -11,6 +11,13 @@
 `data/offsets.json` нет сигнатур, плагин работает в «фейковом» режиме (меню, радар, чат есть,
 позиция Сэма — заглушка).
 
+## Установка для игроков
+
+Скачай **[DSCoopSetup.exe](https://github.com/happyg00se/Co-op-ds/releases/latest)**, запусти и нажми
+«Установить». Установщик сам найдёт игру в Steam, сделает копию сохранений, возьмёт ник из
+Steam и добавит DSCoop в «Приложения» Windows для удаления. Подробно, с ответами на вопросы —
+`docs/install-players.md`.
+
 ## Жёсткие правила проекта
 * Только лицензионная игра (Steam/Epic). Никакого обхода DRM, exe на диске не меняется.
 * Официальный онлайн Kojima Productions не трогаем; в сессии DSCoop играем оффлайн.
@@ -22,6 +29,7 @@
 ```
 src/proto     протокол v0 (header-only)        src/loader   DSLoader → version.dll
 src/common    лог, пути, конфиги               src/plugin   DSCoop.dll (сеть + ImGui + мост к игре)
+src/installer DSCoopSetup.exe (ядро + окно)
 src/net       ENet-транспорт, релей-клиент,     tools/       dscoop_testclient, валидатор offsets.json
               сессия хост/гость                 relay/       relay.py + Dockerfile + тесты
 data/offsets.json  сигнатуры/указатели/RTTI     docs/        разведка, протокол, архитектура, чек-листы
@@ -40,8 +48,9 @@ cmake --build --preset windows-msvc
 ctest --preset windows-msvc
 .\scripts\install.ps1 -GameDir "D:\Steam\steamapps\common\DEATH STRANDING DIRECTORS CUT"
 ```
-Результат: `build\windows-msvc\bin\version.dll`, `bin\dscoop\plugins\DSCoop.dll`,
-`bin\dscoop_testclient.exe`.
+Результат: `build\windows-msvc\bin\DSCoopSetup.exe` (установщик для игроков, всё внутри),
+а также `version.dll`, `bin\dscoop\plugins\DSCoop.dll`, `bin\dscoop_testclient.exe`.
+`scripts\install.ps1` — ручная установка для разработчиков.
 
 ### Linux — тесты, тест-клиент, кросс-сборка Windows
 ```bash
@@ -49,7 +58,8 @@ sudo apt install cmake ninja-build g++ libenet-dev libspdlog-dev libfmt-dev nloh
 pip install pytest pytest-asyncio
 scripts/build-linux.sh        # ctest + pytest
 scripts/e2e-local.sh          # релей + хост + 2 гостя на localhost
-IMGUI_DIR=/path/to/imgui scripts/build-mingw.sh   # version.dll / DSCoop.dll / testclient.exe через mingw-w64
+IMGUI_DIR=/path/to/imgui scripts/build-mingw.sh   # DSCoopSetup.exe, version.dll, DSCoop.dll, testclient.exe через mingw-w64
+scripts/test-installer-wine.sh                    # установщик под Wine: 6 сценариев игрока
 ```
 
 ## Быстрый старт без игры
@@ -60,8 +70,13 @@ dscoop_testclient join --relay 127.0.0.1:27000 --code ABC234 --nick Guest --chat
 dscoop_testclient join --direct 192.168.1.10:27015          # без релея, по IP
 ```
 
+## Выпуск версии
+На GitHub: Releases → «Draft a new release» → тег `v0.2.0` → Publish. Workflow `release.yml`
+соберёт `DSCoopSetup.exe`, проверит его под Wine и прикрепит к релизу. Ссылка для игроков:
+`https://github.com/happyg00se/Co-op-ds/releases/latest`.
+
 ## В игре
-1. Установи (`install.ps1`), запусти игру в оффлайн-режиме.
+1. Установи через `DSCoopSetup.exe`, запусти игру в оффлайн-режиме.
 2. `F9` — меню «Совместная игра»: **Создать сессию** (через релей → код приглашения, или
    напрямую по IP) / **Войти по коду**. Настройки → ник, адрес релея.
 3. Напарники появляются в мире как настоящие Сэмы, когда разведка даст сигнатуры этапа 2
@@ -85,9 +100,9 @@ dscoop_testclient join --direct 192.168.1.10:27015          # без релея,
 | 3 | Груз, постройки, транспорт | — |
 | 4 | Враги и бои, воидауты, PvP | — |
 | 5 | Сюжет: заказы, катсцены, звонки, узлы | — |
-| 6 | Полировка: родное меню, журналы, автообновление, установщик | — |
+| 6 | Полировка: родное меню, журналы, автообновление | установщик уже готов (v0.2.0) |
 
-Документы: `docs/00-recon-guide.md`, `docs/protocol-v0.md`, `docs/architecture.md`,
+Документы: `docs/install-players.md`, `docs/00-recon-guide.md`, `docs/protocol-v0.md`, `docs/architecture.md`,
 `docs/relay.md`, `docs/rtti-dump-format.md`, `docs/test-checklist.md`, `docs/known-bugs.md`,
 `CHANGELOG.md`.
 

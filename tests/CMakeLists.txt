@@ -10,3 +10,7 @@ add_test(NAME sigscan COMMAND test_sigscan)
 add_executable(test_session test_session.cpp)
 target_link_libraries(test_session PRIVATE dscoop::net dscoop::warnings)
 add_test(NAME session COMMAND test_session)
+
+add_executable(test_installer test_installer.cpp)
+target_link_libraries(test_installer PRIVATE dsinstcore dscoop::warnings)
+add_test(NAME installer COMMAND test_installer)

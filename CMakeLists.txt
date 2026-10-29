@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(DSCoop
-    VERSION 0.1.0
+    VERSION 0.2.0
     DESCRIPTION "DSCoop — story co-op mod for Death Stranding Director's Cut (Decima)"
     LANGUAGES C CXX)
 
@@ -26,6 +26,7 @@ option(DSCOOP_BUILD_TESTS    "Build unit tests."                               O
 option(DSCOOP_WITH_IMGUI     "Build ImGui overlay into the plugin."            ON)
 option(DSCOOP_VENDORED_DEPS  "Prefer third_party/ sources over find_package()." OFF)
 option(DSCOOP_WARNINGS_AS_ERRORS "Treat warnings as errors."                   OFF)
+option(DSCOOP_BUILD_INSTALLER "Build DSCoopSetup.exe (needs loader + plugin). Windows only." ${WIN32})
 
 if((DSCOOP_BUILD_LOADER OR DSCOOP_BUILD_PLUGIN) AND NOT WIN32)
     message(FATAL_ERROR "DSLoader/DSCoop.dll are Windows-only. Use -DDSCOOP_BUILD_LOADER=OFF -DDSCOOP_BUILD_PLUGIN=OFF on this platform.")
@@ -43,6 +44,11 @@ configure_file(cmake/version.hpp.in ${CMAKE_BINARY_DIR}/generated/dscommon/versi
 add_subdirectory(src/proto)     # header-only: packet protocol v0
 add_subdirectory(src/common)    # logging, paths, config
 add_subdirectory(src/net)       # ENet transport, relay client, session
+if(DSCOOP_BUILD_INSTALLER AND NOT (DSCOOP_BUILD_LOADER AND DSCOOP_BUILD_PLUGIN))
+    message(STATUS "installer disabled: it embeds DSLoader and DSCoop.dll, enable both")
+    set(DSCOOP_BUILD_INSTALLER OFF)
+endif()
+add_subdirectory(src/installer) # installer core (all platforms) + DSCoopSetup.exe (Windows)
 
 if(DSCOOP_BUILD_LOADER)
     add_subdirectory(src/loader)

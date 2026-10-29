@@ -30,6 +30,7 @@ nlohmann::json LoaderConfig::defaults() {
         {"rtti_force_unverified", false},
         {"load_plugins_without_required_sigs", false},
         {"plugins_dir", "plugins"},
+        {"chain_load", true},
     };
 }
 
@@ -46,6 +47,7 @@ LoaderConfig LoaderConfig::fromJson(const nlohmann::json& j) {
     c.rttiForceUnverified = j.value("rtti_force_unverified", c.rttiForceUnverified);
     c.loadPluginsWithoutRequiredSigs = j.value("load_plugins_without_required_sigs", c.loadPluginsWithoutRequiredSigs);
     c.pluginsDir = j.value("plugins_dir", c.pluginsDir);
+    c.chainLoad = j.value("chain_load", c.chainLoad);
     return c;
 }
 
@@ -151,6 +153,7 @@ void Loader::run() {
     log::init(lo);
     DSLOG_INFO("DSLoader v{} starting, root {}", DSCOOP_VERSION_STRING, rootUtf8_);
     installCrashHandler(paths::reports().string());
+    if (cfg_.chainLoad) loadChain();
 
     std::string err;
     if (!game_.init(&err)) { DSLOG_ERROR("game module: {}", err); return; }
@@ -193,6 +196,19 @@ void Loader::run() {
     buildApi();
     plugins_.loadAll((paths::root() / cfg_.pluginsDir).string(), api_);
     DSLOG_INFO("DSLoader ready: {} plugin(s) loaded", std::count_if(plugins_.plugins().begin(), plugins_.plugins().end(), [](const LoadedPlugin& p) { return p.loaded; }));
+}
+
+void Loader::loadChain() {
+    // Another mod's version.dll that the installer moved aside. Loaded as early as we can so it
+    // behaves (almost) as if it were still the game's version.dll.
+    const auto dir = dscommon::paths::root() / "chain";
+    std::error_code ec;
+    if (!std::filesystem::is_directory(dir, ec)) return;
+    for (const auto& e : std::filesystem::directory_iterator(dir, ec)) {
+        if (!e.is_regular_file() || e.path().extension() != ".dll") continue;
+        if (LoadLibraryW(e.path().wstring().c_str())) DSLOG_INFO("chain: loaded {}", e.path().filename().string());
+        else DSLOG_WARN("chain: failed to load {} (error {})", e.path().filename().string(), GetLastError());
+    }
 }
 
 std::string Loader::collectReport() {

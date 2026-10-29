@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Installs DSCoop into the Death Stranding Director's Cut folder.
+  Developer helper: installs loose build outputs. Players use DSCoopSetup.exe (docs/install-players.md).
 .EXAMPLE
   .\scripts\install.ps1 -GameDir "C:\Program Files (x86)\Steam\steamapps\common\DEATH STRANDING DIRECTORS CUT" -BuildDir .\build\windows-msvc\bin
 #>

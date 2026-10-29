@@ -25,6 +25,7 @@ struct LoaderConfig {
     bool dumpRtti = false;
     bool rttiForceUnverified = false;
     bool loadPluginsWithoutRequiredSigs = false;
+    bool chainLoad = true;              // load dscoop/chain/*.dll (another mod's version.dll moved aside by the installer)
     std::string pluginsDir = "plugins";
 
     static LoaderConfig fromJson(const nlohmann::json& j);
@@ -50,6 +51,7 @@ private:
     void run();
     bool waitForGame();
     void buildApi();
+    void loadChain();
 
     LoaderConfig cfg_;
     GameModule game_;
