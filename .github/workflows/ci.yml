@@ -40,7 +40,17 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
-      # The runner image ships vcpkg at $env:VCPKG_ROOT; manifest mode installs vcpkg.json deps on configure.
+      - name: Install Ninja
+        run: choco install ninja -y --no-progress
+      # Own vcpkg checkout: the runner's VS-bundled vcpkg needs a baseline we do not pin in the repo.
+      # x-update-baseline writes the checkout's HEAD into vcpkg.json for this run only.
+      - name: Set up vcpkg
+        shell: pwsh
+        run: |
+          git clone https://github.com/microsoft/vcpkg C:\vcpkg-dscoop
+          C:\vcpkg-dscoop\bootstrap-vcpkg.bat -disableMetrics
+          C:\vcpkg-dscoop\vcpkg.exe x-update-baseline --add-initial-baseline
+          "VCPKG_ROOT=C:\vcpkg-dscoop" >> $env:GITHUB_ENV
       - name: Configure
         run: cmake --preset windows-msvc
       - name: Build
