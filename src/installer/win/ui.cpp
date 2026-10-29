@@ -14,6 +14,7 @@ using std::min;
 
 #include <commctrl.h>
 #include <dwmapi.h>
+#include <objidl.h>  // GDI+ needs COM types that WIN32_LEAN_AND_MEAN leaves out (MSVC)
 #include <gdiplus.h>
 #include <shlwapi.h>
 
