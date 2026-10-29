@@ -4,6 +4,7 @@
 //     DSCoopSetup.exe /S [/dir=PATH] [/nick=NAME] [/relay=HOST[:PORT]] [/nobackup] [/log=FILE]
 //     DSCoopSetup.exe /S /uninstall [/dir=PATH] [/purge]
 //   Exit codes: 0 ok, 1 error, 2 game not found, 3 game is running.
+//   Demo recording: DSCoopSetup.exe /preview=DIR (scripted session -> DIR\frame_NNNN.png, installs nothing).
 #include <fstream>
 
 #include "sys.hpp"

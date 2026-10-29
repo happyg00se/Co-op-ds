@@ -62,6 +62,7 @@ scripts/build-linux.sh        # ctest + pytest
 scripts/e2e-local.sh          # релей + хост + 2 гостя на localhost
 IMGUI_DIR=/path/to/imgui scripts/build-mingw.sh   # DSCoopSetup.exe, version.dll, DSCoop.dll, testclient.exe через mingw-w64
 scripts/test-installer-wine.sh                    # установщик под Wine: 6 сценариев игрока
+scripts/record-installer-demo.sh                  # демо-видео установщика (MP4 + GIF) в build/demo/
 ```
 
 ## Быстрый старт без игры

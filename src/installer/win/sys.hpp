@@ -25,6 +25,7 @@ struct Args {
     bool noBackup = false;
     bool autostart = false;  // elevated relaunch: start the action immediately
     std::wstring dir, nick, relay, logFile;
+    std::wstring preview;    // /preview=DIR: render a scripted demo to DIR\frame_NNNN.png (docs/marketing), no install
 };
 Args parseArgs();
 

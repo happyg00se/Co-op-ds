@@ -48,6 +48,7 @@ Args parseArgs() {
         else if (auto n = val(L"/nick=")) a.nick = *n;
         else if (auto r = val(L"/relay=")) a.relay = *r;
         else if (auto l = val(L"/log=")) a.logFile = *l;
+        else if (auto pv = val(L"/preview=")) a.preview = *pv;
     }
     if (argv) LocalFree(argv);
     return a;

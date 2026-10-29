@@ -298,6 +298,14 @@ struct App {
     std::array<float, 5> pulse{};
     std::mt19937 rng{20261029};
 
+    // /preview: deterministic demo recording (scripted cursor, simulated install, frames to PNG)
+    bool preview = false;
+    float cursorX = 780, cursorY = 470;
+    bool cursorDown = false;
+    int previewFocus = kNone;
+    float previewWorkerStart = -1;
+    std::unordered_map<std::wstring, std::wstring> fitCache;
+
     // gdi+
     ULONG_PTR gdipToken = 0;
     std::unique_ptr<Fonts> fonts;
@@ -589,6 +597,41 @@ void drawRain(Graphics& gr) {
 }
 
 // =============================================================================== widgets
+std::wstring editText(HWND e) {
+    const int n = GetWindowTextLengthW(e);
+    std::wstring s(static_cast<size_t>(n), L'\0');
+    GetWindowTextW(e, s.data(), n + 1);
+    return s;
+}
+
+/// "D:\…\common\DEATH STRANDING" style shortening that works the same on Windows and Wine.
+std::wstring fitPath(Graphics& gr, const std::wstring& s, const Font* f, float maxW) {
+    auto it = g.fitCache.find(s);
+    if (it != g.fitCache.end()) return it->second;
+    auto width = [&](const std::wstring& t) {
+        RectF b;
+        gr.MeasureString(t.c_str(), static_cast<INT>(t.size()), f, PointF(0, 0), &b);
+        return b.Width;
+    };
+    std::wstring out = s;
+    if (width(s) > maxW) {
+        const std::wstring head = s.substr(0, std::min<size_t>(3, s.size()));
+        out = head + L"…";
+        bool found = false;
+        for (size_t cut = 3; cut < s.size() && !found; ++cut) {  // prefer whole folder names: "D:\…\common\GAME"
+            if (s[cut - 1] != L'\\' && s[cut - 1] != L'/') continue;
+            std::wstring t = head + L"…\\" + s.substr(cut);
+            if (width(t) <= maxW) { out = t; found = true; }
+        }
+        for (size_t cut = 3; cut < s.size() && !found; ++cut) {
+            std::wstring t = head + L"…" + s.substr(cut);
+            if (width(t) <= maxW) { out = t; found = true; }
+        }
+    }
+    g.fitCache[s] = out;
+    return out;
+}
+
 void addHit(int id, const R& r) { g.hits.emplace_back(id, r); }
 float hov(int id) { return g.hover[static_cast<size_t>(id)].v; }
 
@@ -689,6 +732,20 @@ void field(Graphics& gr, int id, const R& r, const std::wstring& label, const st
     fillRound(gr, r, 10, bg);
     const float h = hov(id);
     strokeRound(gr, r, 10, C(focus > 0.5f ? kGold : 0xFFFFFF, focus > 0.5f ? 0.75f * a : (0.12f + 0.12f * h) * a), 1.f);
+    if (g.preview) {  // edit controls are separate windows: draw their content into the recorded frame
+        const std::wstring v = editText(id == kField1 ? g.editNick : g.editRelay);
+        const bool cue = v.empty() && id == kField2;
+        const std::wstring shown = cue ? L"relay.example.com:27000" : v;
+        SolidBrush tb(C(cue ? kFaint : kText, a));
+        gr.DrawString(shown.c_str(), static_cast<INT>(shown.size()), g.fonts->body15.get(), PointF(r.x + 13, r.y + 11), &tb);
+        if (focus > 0.5f && std::fmod(g.t, 1.0f) < 0.55f) {
+            RectF b;
+            gr.MeasureString(v.c_str(), static_cast<INT>(v.size()), g.fonts->body15.get(), PointF(0, 0), &b);
+            Pen caret(C(kText, a), 1.2f);
+            const float cx = r.x + 13 + (v.empty() ? 2.f : b.Width - 2.f);
+            gr.DrawLine(&caret, cx, r.y + 11, cx, r.y + 31);
+        }
+    }
 }
 
 // =============================================================================== state helpers
@@ -704,13 +761,6 @@ void goPage(Page p) {
     if (g.page == p && !g.switching) return;
     g.nextPage = p;
     g.switching = true;
-}
-
-std::wstring editText(HWND e) {
-    const int n = GetWindowTextLengthW(e);
-    std::wstring s(static_cast<size_t>(n), L'\0');
-    GetWindowTextW(e, s.data(), n + 1);
-    return s;
 }
 
 void placeEdits() {
@@ -794,6 +844,19 @@ bool preflight(bool uninstalling) {
 
 void doInstall() {
     if (g.busy) return;
+    if (g.preview) {  // demo: simulated install, nothing touches the disk
+        g.busy = true;
+        g.uninstalling = false;
+        g.workerStep = -1;
+        g.workerDone = false;
+        g.shownStep = -1;
+        g.lastStepTime = g.t;
+        g.allDoneTime = -1;
+        g.strandFill = Tw{};
+        g.previewWorkerStart = g.t;
+        goPage(Page::Progress);
+        return;
+    }
     refreshState();
     if (g.st.installed && compareVersions(g.st.version, DSCOOP_VERSION_STRING) > 0 && !(g.replaceNewerArmed && g.t - g.replaceArmTime < 8)) {
         g.replaceNewerArmed = true;
@@ -843,6 +906,7 @@ void activate(int id) {
         case kPrimary:
             if (g.page == Page::Welcome) { g.confirmUninstall ? doUninstall() : doInstall(); }
             else if (g.page == Page::Done) {
+                if (g.preview) break;
                 if (!g.doneIsUninstall) { win::launchGame(g.game ? g.game->appId : ""); g.pendingCloseAt = g.t + 0.7f; }
                 else requestClose();
             } else if (g.page == Page::Error) { refreshState(); goPage(Page::Welcome); }
@@ -913,8 +977,8 @@ void drawGameCard(Graphics& gr, float a) {
     gr.FillEllipse(&core, card.x + 18 - 4.f, card.y + 25 - 4.f, 8.f, 8.f);
     text(gr, title, g.fonts->bodyBold15.get(), C(kText, a), {card.x + 34, card.y + 14, 200, 22});
     link(gr, kChange, card.x + card.w - 14, card.y + 15, g.gameDir.empty() ? S->choose : S->change, a, true);
-    text(gr, sub, g.fonts->small12.get(), C(kFaint, a), {card.x + 34, card.y + 37, card.w - 48, 18}, StringAlignmentNear, StringAlignmentNear, false,
-         StringTrimmingEllipsisPath);
+    if (!g.gameDir.empty()) sub = fitPath(gr, sub, g.fonts->small12.get(), card.w - 52);
+    text(gr, sub, g.fonts->small12.get(), C(kFaint, a), {card.x + 34, card.y + 37, card.w - 48, 18});
     std::wstring state = S->notInstalled;
     uint32_t sc = kFaint;
     if (g.st.installed) { state = std::wstring(S->installedState) + W(g.st.version); sc = kLink; }
@@ -1190,6 +1254,24 @@ void render(HDC hdc) {
     gr.Restore(st);
     drawToast(gr);
     drawTitleBar(gr);
+    if (g.preview) {  // the scripted mouse pointer
+        GraphicsState cs = gr.Save();
+        gr.TranslateTransform(g.cursorX, g.cursorY);
+        const float k = g.cursorDown ? 0.88f : 1.f;
+        gr.ScaleTransform(k * 1.15f, k * 1.15f);
+        PointF arrow[7] = {PointF(0, 0), PointF(0, 17), PointF(4.2f, 13.2f), PointF(7.2f, 19.6f), PointF(9.8f, 18.4f), PointF(6.9f, 12.2f), PointF(12.2f, 12.2f)};
+        SolidBrush shadow(C(0x000000, 0.35f));
+        GraphicsState ss = gr.Save();
+        gr.TranslateTransform(1.2f, 1.6f);
+        gr.FillPolygon(&shadow, arrow, 7);
+        gr.Restore(ss);
+        SolidBrush white(C(0xFFFFFF, 1));
+        gr.FillPolygon(&white, arrow, 7);
+        Pen outline(C(0x000000, 1), 1.f);
+        outline.SetLineJoin(LineJoinRound);
+        gr.DrawPolygon(&outline, arrow, 7);
+        gr.Restore(cs);
+    }
 
     BitBlt(hdc, 0, 0, w, h, g.memDC, 0, 0, SRCCOPY);
 }
@@ -1221,8 +1303,17 @@ void tick(float dt) {
         g.hover[static_cast<size_t>(i)].step(dt, 14.f);
     }
     const HWND focus = GetFocus();
-    g.focusNick.target = focus == g.editNick ? 1.f : 0.f;
-    g.focusRelay.target = focus == g.editRelay ? 1.f : 0.f;
+    g.focusNick.target = (g.preview ? g.previewFocus == kField1 : focus == g.editNick) ? 1.f : 0.f;
+    g.focusRelay.target = (g.preview ? g.previewFocus == kField2 : focus == g.editRelay) ? 1.f : 0.f;
+    if (g.preview && g.previewWorkerStart >= 0 && !g.workerDone) {
+        static const wchar_t* kLines[] = {L"saves backed up (2 MB) -> D:\\SteamLibrary\\...\\dscoop\\backups\\saves_install",
+                                          L"installed version.dll (3 MB)", L"installed dscoop/plugins/DSCoop.dll (4 MB)",
+                                          L"DSCoop 0.2.0 installed"};
+        const int k = std::min(3, static_cast<int>((g.t - g.previewWorkerStart) / 0.35f));
+        g.workerStep = k;
+        g.lastLog = kLines[k];
+        if (g.t - g.previewWorkerStart > 1.5f) { g.workerDone = true; g.workerOk = true; }
+    }
     g.focusNick.step(dt, 14.f);
     g.focusRelay.step(dt, 14.f);
     g.checkAnim.target = g.backup ? 1.f : 0.f;
@@ -1422,6 +1513,69 @@ void detectInitial() {
     if (g.args.uninstall && !g.args.autostart) g.confirmUninstall = true;
 }
 
+// =============================================================================== preview recording
+struct Key { float t, x, y; };
+
+int pngEncoder(CLSID* clsid) {
+    UINT num = 0, size = 0;
+    GetImageEncodersSize(&num, &size);
+    if (!size) return -1;
+    std::vector<uint8_t> buf(size);
+    auto* info = reinterpret_cast<ImageCodecInfo*>(buf.data());
+    GetImageEncoders(num, size, info);
+    for (UINT i = 0; i < num; ++i)
+        if (wcscmp(info[i].MimeType, L"image/png") == 0) { *clsid = info[i].Clsid; return static_cast<int>(i); }
+    return -1;
+}
+
+/// Renders the player journey at exactly 30 fps into DIR\frame_NNNN.png. Used for README/demo videos
+/// (scripts/record-installer-demo.sh). Nothing is installed: the progress is simulated.
+int runPreview() {
+    CLSID png;
+    if (pngEncoder(&png) < 0) return 1;
+    std::error_code ec;
+    fs::create_directories(g.args.preview, ec);
+    const Key path[] = {{0.0f, 790, 470}, {2.3f, 790, 470}, {3.1f, 236, 311}, {4.8f, 236, 311}, {5.7f, 236, 479},
+                        {7.0f, 236, 479}, {7.9f, 700, 300}, {11.4f, 700, 300}, {12.2f, 236, 479}, {15.0f, 236, 479}};
+    const float fps = 30.f, length = 15.0f;
+    const std::wstring typed = L"Фрэджайл";
+    HDC dc = GetDC(g.wnd);
+    for (int f = 0; f < static_cast<int>(length * fps); ++f) {
+        const float t = static_cast<float>(f) / fps;
+        // cursor path
+        for (size_t i = 0; i + 1 < std::size(path); ++i) {
+            if (t >= path[i].t && t <= path[i + 1].t) {
+                const float k = easeInOut((t - path[i].t) / std::max(0.001f, path[i + 1].t - path[i].t));
+                g.cursorX = path[i].x + (path[i + 1].x - path[i].x) * k;
+                g.cursorY = path[i].y + (path[i + 1].y - path[i].y) * k;
+            }
+        }
+        g.hot = hitAt(g.cursorX, g.cursorY);
+        auto clickAt = [&](float when) { return t >= when && t < when + 0.14f; };
+        g.cursorDown = clickAt(3.2f) || clickAt(7.0f);
+        g.pressed = g.cursorDown ? g.hot : kNone;
+        if (f == static_cast<int>(3.34f * fps)) { g.previewFocus = kField1; SetWindowTextW(g.editNick, L""); }
+        if (t > 3.5f && t < 4.6f) {  // typing a nickname
+            const size_t n = std::min(typed.size(), static_cast<size_t>((t - 3.5f) * 9.f));
+            SetWindowTextW(g.editNick, typed.substr(0, n).c_str());
+        }
+        if (f == static_cast<int>(5.0f * fps)) g.previewFocus = kNone;
+        if (f == static_cast<int>(7.14f * fps)) activate(kPrimary);
+        tick(1.f / fps);
+        render(dc);
+        SelectObject(g.memDC, g.memOld);  // GDI+ must not read a bitmap that is selected into a DC
+        {
+            Bitmap frame(g.memBmp, nullptr);
+            wchar_t name[32];
+            swprintf(name, 32, L"frame_%04d.png", f);
+            frame.Save((fs::path(g.args.preview) / name).wstring().c_str(), &png, nullptr);
+        }
+        SelectObject(g.memDC, g.memBmp);
+    }
+    ReleaseDC(g.wnd, dc);
+    return 0;
+}
+
 int run(HINSTANCE inst, int show, const win::Args& args) {
     g.inst = inst;
     g.args = args;
@@ -1483,6 +1637,18 @@ int run(HINSTANCE inst, int show, const win::Args& args) {
     SendMessageW(g.editRelay, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"relay.example.com:27000"));
 
     detectInitial();
+    if (!g.args.preview.empty()) {
+        g.preview = true;
+        g.motion = true;
+        const int rc = runPreview();
+        DestroyWindow(g.wnd);
+        g.bgCache.reset();
+        g.hero.reset();
+        g.logoPath.reset();
+        g.fonts.reset();
+        GdiplusShutdown(g.gdipToken);
+        return rc;
+    }
     g.last = std::chrono::steady_clock::now();
     SetTimer(g.wnd, 1, 15, nullptr);
     ShowWindow(g.wnd, show);
